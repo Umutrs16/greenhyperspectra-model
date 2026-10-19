@@ -1,0 +1,16 @@
+# B3 / H1: original RTM-AE style — one fixed acquisition/canopy scene.
+model:
+  use_marginalization: false
+rtm:
+  M_train: 1
+  M_eval: 1
+  nuisance:
+    SZA: [30.0, 30.0]
+    VZA: [0.0, 0.0]
+    RAA: [0.0, 0.0]
+    ALA: [57.3, 57.3]   # LIDF=5 spherical-equivalent
+    psoil: [0.8, 0.8]
+    rsoil: [1.0, 1.0]
+    hotspot: [0.01, 0.01]
+    N: [1.5, 1.5]
+    Cbrown: [0.0, 0.0]

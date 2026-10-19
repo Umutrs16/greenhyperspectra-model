@@ -1,0 +1,12 @@
+# Override: strict EMIT hold-out for satellite transfer demonstration.
+# Unlabeled pretraining AND labeled training both exclude EMIT sources.
+
+data:
+  emit_free: true
+  exclude_source_keywords: [emit, NASA/EMIT, EMITL2A, EMIT_L2A]
+
+splits:
+  leave_sensors: [ASD, AVIRIS-NG, AVIRIS-C, NEON, AISA, PRISMA, EnMAP, Hyperion]
+
+gee:
+  native_bands: true

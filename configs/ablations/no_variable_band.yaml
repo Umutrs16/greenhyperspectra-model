@@ -1,0 +1,3 @@
+model:
+  use_variable_band: false
+  use_sensor_degradation: false

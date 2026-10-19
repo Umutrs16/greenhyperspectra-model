@@ -1,0 +1,159 @@
+project:
+  name: green_rtm_domain
+  model_name: RTM-MargSpecFormer
+  title: "Diagnosing Nuisance-Averaged Radiative-Transfer Constraints for Cross-Source Hyperspectral Trait Retrieval: A GreenHyperSpectra Assessment"
+  gee_project: ""
+  seed: 42
+  license_note: "GreenHyperSpectra is CC BY-NC 4.0. Cite Cherif et al. 2025 (arXiv:2507.06806)."
+
+paths:
+  data_root: data
+  raw_hf: data/raw_hf
+  metadata: data/metadata_sources.csv
+  splits: data/split_manifests
+  rtm_library: data/rtm_library
+  emit_exports: data/emit_exports
+  results: results
+  figures: results/figures
+  tables: results/tables
+  checkpoints: results/checkpoints
+
+spectra:
+  lambda_min: 400
+  lambda_max: 2500
+  step_nm: 1
+  drop_ranges:
+    - [1351, 1430]
+    - [1801, 2050]
+    - [2451, 2500]
+  n_bands: 1721
+  reflectance_min: -0.05
+  reflectance_max: 1.20
+  keep_range: [0.0, 1.2]
+  water_vapor_mask: true
+
+traits:
+  primary: [LAI, Cab, Cw, Cm, Cp]
+  supplementary: [Car, Anth]
+  derived: [Cbc]
+  units:
+    LAI: "m2 m-2"
+    Cab: "ug cm-2"
+    Car: "ug cm-2"
+    Anth: "ug cm-2"
+    Cw: "cm"
+    Cm: "g cm-2"
+    Cp: "g cm-2"
+    Cbc: "g cm-2"
+  transform: boxcox   # fit on train sources only
+
+data:
+  hf_repo: Avatarr05/GreenHyperSpectra
+  unlabeled_config: unlabeled
+  labeled_config: labeled_all
+  official_split_config: labeled_splits
+  prefer_raw_csv: true
+  emit_free: true
+  exclude_source_keywords: [emit, NASA/EMIT, EMITL2A, EMIT_L2A]
+
+splits:
+  n_cross_dataset_folds: 10
+  holdout_sources_per_fold: 5
+  leave_platforms: [proximal, airborne, spaceborne]
+  leave_sensors: [ASD, AVIRIS-NG, AVIRIS-C, NEON, AISA, PRISMA, EnMAP, Hyperion, EMIT]
+  n_seeds: 3
+  id_train_frac: 0.80
+
+rtm:
+  n_samples: 400000
+  n_sanity: 2048
+  wavelengths: [400, 2500, 1]
+  emulator_hidden: [256, 256, 256]
+  emulator_epochs: 40
+  emulator_batch: 2048
+  jacobian_traits: [LAI, Cab, Cw, Cm, Cp]
+  theta:
+    LAI: [0.05, 9.0]
+    Cab: [1.0, 90.0]
+    Car: [0.5, 25.0]
+    Anth: [0.0, 8.0]
+    Cw: [0.001, 0.07]
+    Cm: [0.001, 0.04]
+    Cp: [0.0002, 0.012]
+  nuisance:
+    SZA: [0.0, 70.0]
+    VZA: [0.0, 35.0]
+    RAA: [0.0, 180.0]
+    ALA: [20.0, 70.0]
+    psoil: [0.0, 1.0]
+    rsoil: [0.3, 1.6]
+    hotspot: [0.001, 0.20]
+    N: [1.1, 2.6]
+    Cbrown: [0.0, 1.2]
+  hotspot_log_uniform: true
+  M_train: 8
+  M_eval: 16
+
+model:
+  variant: M3
+  depth: 4
+  dim: 128
+  heads: 4
+  patch_size: 16
+  mlp_ratio: 4.0
+  dropout: 0.08
+  mask_ratio: 0.72
+  jacobian_mask_frac: 0.40
+  residual_rank: 8
+  residual_amp: 0.05
+  residual_smooth: 0.20
+  use_variable_band: true
+  use_jacobian_mask: true
+  use_rtm: true
+  use_marginalization: true
+  use_low_rank_residual: false
+  use_protein_fraction: false
+  use_sensor_degradation: true
+  use_domain_reg: false
+  pseudo_fwhm: [5.0, 20.0]
+
+train:
+  optimizer: AdamW
+  lr: 0.0003
+  weight_decay: 0.05
+  batch_size: 128
+  pretrain_epochs: 80
+  finetune_epochs: 60
+  warmup_epochs: 5
+  grad_clip: 1.0
+  amp: true
+  num_workers: 4
+  huber_delta: 1.0
+  lambdas:
+    trait: 1.0
+    mask: 1.0
+    rtm: 0.3
+    residual: 0.1
+    domain: 0.0
+
+gee:
+  project: ""
+  collection: NASA/EMIT/L2A/RFL
+  start: "2023-01-01"
+  end: "2026-08-31"
+  n_scenes: 6
+  veg_fraction_min: 0.30
+  scale: 60
+  worldcover: ESA/WorldCover/v200
+  modis_lai: MODIS/061/MCD15A3H
+  s2: COPERNICUS/S2_SR_HARMONIZED
+  export_folder: GreenRTM_EMIT
+  native_bands: true
+  # Official GEE catalog spelling
+  uncertainty_prefix: reflectance_uncertainity_
+
+eval:
+  metrics: [r2, rmse, mae, nrmse, bias, spearman]
+  bootstrap_samples: 5000
+  fdr_alpha: 0.05
+  max_per_source_subsample: 30

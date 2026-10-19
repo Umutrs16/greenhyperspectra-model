@@ -1,0 +1,3 @@
+rtm:
+  M_train: 4
+  M_eval: 8

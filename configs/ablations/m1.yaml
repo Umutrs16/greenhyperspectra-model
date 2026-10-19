@@ -1,0 +1,5 @@
+rtm:
+  M_train: 1
+  M_eval: 1
+model:
+  use_marginalization: false
