@@ -33,6 +33,22 @@ class RTMMargSpecFormer(nn.Module):
             M=int(cfg["rtm"]["M_train"]),
             n_bands=n_bands,
         )
+        if bool(m.get("bound_nuisance", False)):
+            from .rtm_marginalizer import NUISANCE
+            lo, hi, init = [], [], []
+            theta = cfg["rtm"]["theta"]
+            nuisance = cfg["rtm"]["nuisance"]
+            physical_init = {
+                "Car": 8.0, "Anth": 0.5, "N": 1.6, "Cbrown": 0.1,
+                "SZA": 30.0, "VZA": 8.0, "RAA": 90.0, "ALA": 45.0,
+                "psoil": 0.5, "rsoil": 1.0, "hotspot": 0.02,
+            }
+            for name in NUISANCE:
+                bounds = nuisance.get(name, theta.get(name))
+                lo.append(float(bounds[0]))
+                hi.append(float(bounds[1]))
+                init.append(float(physical_init[name]))
+            self.marginalizer.enable_library_bounds(lo, hi, init, latent_std=0.5)
         self.residual = LowRankResidual(int(m["dim"]), n_bands=n_bands, rank=int(m["residual_rank"]))
         if physics_weight is None:
             physics_weight = torch.ones(n_bands)

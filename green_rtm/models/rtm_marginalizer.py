@@ -23,6 +23,35 @@ class RTMMarginalizer(nn.Module):
         ))
         self.nuisance_log_std = nn.Parameter(torch.zeros(len(NUISANCE)))
         self.theta_from_pred = nn.Identity()
+        self.bound_nuisance = False
+
+    def enable_library_bounds(self, lo: list[float], hi: list[float], init_physical: list[float], latent_std: float = 0.5) -> None:
+        """Map the trainable Gaussian through a logistic onto the emulator library.
+
+        The stored mean and log-std are in unconstrained coordinates. Every draw is inside
+        [lo, hi]. This is a separate experiment from the reported unbounded sampler.
+        """
+        lo_t = torch.tensor(lo, dtype=torch.float32)
+        hi_t = torch.tensor(hi, dtype=torch.float32)
+        if "nuisance_lo" not in self._buffers:
+            self.register_buffer("nuisance_lo", lo_t)
+            self.register_buffer("nuisance_hi", hi_t)
+        else:
+            self.nuisance_lo.copy_(lo_t)
+            self.nuisance_hi.copy_(hi_t)
+        phys = torch.tensor(init_physical, dtype=torch.float32)
+        unit = ((phys - lo_t) / (hi_t - lo_t)).clamp(1e-4, 1.0 - 1e-4)
+        latent = torch.log(unit / (1.0 - unit))
+        with torch.no_grad():
+            self.nuisance_mean.copy_(latent)
+            self.nuisance_log_std.fill_(float(torch.log(torch.tensor(latent_std))))
+        self.bound_nuisance = True
+
+    def _to_physical(self, latent: torch.Tensor) -> torch.Tensor:
+        if not self.bound_nuisance:
+            return latent
+        unit = torch.sigmoid(latent)
+        return self.nuisance_lo + (self.nuisance_hi - self.nuisance_lo) * unit
 
     def sample_nuisance(
         self,
@@ -33,16 +62,19 @@ class RTMMarginalizer(nn.Module):
     ) -> torch.Tensor:
         M = M or self.M
         if fixed:
-            return self.nuisance_mean.view(1, 1, -1).expand(batch, M, -1).contiguous()
-        std = self.nuisance_log_std.exp()
-        eps = torch.randn(batch, M, len(NUISANCE), device=self.nuisance_mean.device)
-        eta = self.nuisance_mean + std * eps
+            latent = self.nuisance_mean.view(1, 1, -1).expand(batch, M, -1)
+        else:
+            std = self.nuisance_log_std.exp()
+            eps = torch.randn(batch, M, len(NUISANCE), device=self.nuisance_mean.device)
+            latent = self.nuisance_mean + std * eps
+        eta = self._to_physical(latent)
         if known:
+            eta = eta.clone()
             for name, value in known.items():
                 if name in NUISANCE:
                     j = NUISANCE.index(name)
                     eta[:, :, j] = value.view(-1, 1)
-        return eta
+        return eta.contiguous()
 
     def forward(
         self,
